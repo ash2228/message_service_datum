@@ -1,0 +1,18 @@
+{
+  "name": "telegram_service",
+  "version": "1.0.0",
+  "description": "Express service that delivers alerts to concerned users over Telegram, with a username-to-chat-id linking flow backed by MongoDB.",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "type": "commonjs",
+  "dependencies": {
+    "dotenv": "^18.0.3",
+    "express": "^5.2.1",
+    "mongoose": "^9.10.2",
+    "node-telegram-bot-api": "^2.1.0"
+  }
+}
