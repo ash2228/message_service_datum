@@ -50,18 +50,24 @@ sequenceDiagram
     Upstream->>Svc: POST /alerts<br/>x-shared-secret, x-drains: TELEGRAM<br/>{ alert, users: [{username}|{telegramChatId}] }
     Svc->>Svc: verify shared secret
     Svc->>Svc: parse x-drains, keep only TELEGRAM
-    Svc->>Mongo: find users by username → chatId
-    loop each resolved user
-        Svc->>TG: sendMessage(chatId, text)
-        TG-->>Users: message delivered
+    Svc->>Mongo: check/update metric_alert_state cooldown for alert.metric
+    alt cooldown active and not critical
+        Svc-->>Upstream: 200 { results: [...all success:false, cooldown error] }
+    else allowed (critical, cooldown expired, or no metric)
+        Svc->>Mongo: find users by username → chatId
+        loop each resolved user
+            Svc->>TG: sendMessage(chatId, text)
+            TG-->>Users: message delivered
+        end
+        Svc-->>Upstream: 200/207 { drain: "TELEGRAM", results: [...] }
     end
-    Svc-->>Upstream: 200/207 { drain: "TELEGRAM", results: [...] }
 ```
 
 **Key points**
 - `x-drains` lets the caller ask for multiple channels without this service erroring on ones it doesn't implement yet — anything besides `TELEGRAM` comes back under `skipped`.
 - Users can be named by `username` (resolved via Mongo — the normal case, populated by the linking flow above) or by a raw `telegramChatId` (an escape hatch if the caller already has one).
 - Delivery is per-user and independent: one user's failure (unlinked username, blocked bot, bad chat id) doesn't stop delivery to the others. The response reports success/failure per user, and the HTTP status is `207` if any user failed, `200` if all succeeded.
+- Non-critical alerts are throttled per `alert.metric`: a repeat within `DEFAULT_COOLDOWN_SECONDS` is accepted but not delivered (every user comes back `success: false` with a cooldown error). `severity: "critical"` always bypasses this. See [mental-model.md](./mental-model.md) and [api-reference.md](./api-reference.md).
 
 ## Putting it together
 

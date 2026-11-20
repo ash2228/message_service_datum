@@ -14,6 +14,10 @@ So the service keeps its own mapping, `{ username, chatId }`, in a `users` Mongo
 - `{ "username": "alice" }` — resolved against that collection, or
 - `{ "telegramChatId": "123456789" }` — used directly, if the caller already has it for some reason.
 
+## `severity` isn't just cosmetic — it gates the cooldown
+
+`POST /alerts` doesn't just prefix `[CRITICAL]` onto the message text; `severity: "critical"` is the one thing that bypasses per-`metric` throttling. Everything else is subject to a cooldown: if the same `metric` was already sent within the last `DEFAULT_COOLDOWN_SECONDS`, a repeat non-critical alert is accepted but not delivered (see [api-reference.md](./api-reference.md)). The intent is that upstream monitoring can safely re-fire the same non-critical alert on every check interval without this service hammering users with duplicates, while a critical alert always gets through immediately — cooldown state never overrides "this is critical."
+
 ## A bot can't message a user first — the user has to "link" themselves
 
 Telegram bots cannot initiate a DM with a user. A user has to open a chat with the bot and press **Start** at least once before the bot can ever send them anything. That's a hard platform constraint, not a design choice — it shapes the whole "linking" flow described in [workflow.md](./workflow.md).

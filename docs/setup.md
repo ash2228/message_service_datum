@@ -16,6 +16,7 @@ Copy `.env.example` to `.env` and fill in real values:
 | `SHARED_SECRET` | the value callers must send as `x-shared-secret` on every request |
 | `TELEGRAM_BOT_TOKEN` | bot token from BotFather |
 | `MONGO_URI` | MongoDB connection string (either `mongodb://` or `mongodb+srv://`) |
+| `DEFAULT_COOLDOWN_SECONDS` | how long a non-critical alert must wait before the same `metric` can be sent again (default `300`) |
 
 `.env` is git-ignored — never commit real secrets.
 

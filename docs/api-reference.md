@@ -50,7 +50,8 @@ Sends an alert to every concerned user over the drains listed in `x-drains` (onl
   "alert": {
     "title": "High CPU usage",
     "message": "CPU usage exceeded 90% on host web-01",
-    "severity": "critical"
+    "severity": "critical",
+    "metric": "cpu.usage.web-01"
   },
   "users": [
     { "username": "alice" },
@@ -59,10 +60,23 @@ Sends an alert to every concerned user over the drains listed in `x-drains` (onl
 }
 ```
 
-- `alert` — required; needs at least a `title` or a `message`. `severity` is optional and prefixed onto the outgoing text (e.g. `[CRITICAL]`).
+- `alert` — required; needs at least a `title` or a `message`.
+  - `severity` is optional and prefixed onto the outgoing text (e.g. `[CRITICAL]`). `severity: "critical"` also bypasses the cooldown below — critical alerts always send.
+  - `metric` is optional and used to key the cooldown described below. Without it, every request sends immediately with no deduplication.
 - `users` — required, non-empty array. Each entry needs either:
   - `username` — resolved against the `users` collection (populated by the link flow), or
   - `telegramChatId` — used as-is, no lookup.
+
+**Cooldown**
+
+To avoid spamming the same alert repeatedly, non-critical alerts are throttled per `metric`:
+
+- The first time a `metric` is sent, and any time `DEFAULT_COOLDOWN_SECONDS` has elapsed since it was last sent, it goes through normally.
+- If it was sent more recently than that, the request is accepted but not delivered — every user in `results` comes back with `success: false` and an error explaining the cooldown and how many seconds remain.
+- `severity: "critical"` is always sent immediately regardless of cooldown state, and resets the cooldown clock for that `metric`.
+- Alerts without a `metric` are never throttled.
+
+The cooldown window defaults to `DEFAULT_COOLDOWN_SECONDS` (see [setup.md](./setup.md)) and is tracked per `metric` in the `metric_alert_state` MongoDB collection.
 
 **Response**
 

@@ -1,6 +1,7 @@
 const express = require('express');
 const verifySharedSecret = require('../middleware/verifySharedSecret');
 const telegramService = require('../services/telegramService');
+const cooldownService = require('../services/cooldownService');
 const User = require('../models/User');
 
 const router = express.Router();
@@ -71,15 +72,29 @@ router.post('/alerts', verifySharedSecret, async (req, res) => {
   }
 
   try {
-    const resolvedUsers = await resolveChatIds(users);
-    const sendable = resolvedUsers.filter((user) => user.telegramChatId);
-    const unresolved = resolvedUsers
-      .filter((user) => !user.telegramChatId)
-      .map((user) => ({ username: user.username, success: false, error: 'no linked Telegram chat for this user' }));
+    const cooldown = await cooldownService.shouldSend(alert.metric, alert.severity);
 
-    const text = formatAlertMessage(alert);
-    const sent = sendable.length > 0 ? await telegramService.sendToUsers(sendable, text) : [];
-    const results = [...sent, ...unresolved];
+    let results;
+    if (!cooldown.allowed) {
+      const retryAfterSeconds = Math.ceil(cooldown.retryAfterMs / 1000);
+      results = users.map((user) => ({
+        username: user.username,
+        telegramChatId: user.telegramChatId,
+        success: false,
+        error: `cooldown active for metric "${alert.metric}"; retry after ${retryAfterSeconds}s`,
+      }));
+    } else {
+      const resolvedUsers = await resolveChatIds(users);
+      const sendable = resolvedUsers.filter((user) => user.telegramChatId);
+      const unresolved = resolvedUsers
+        .filter((user) => !user.telegramChatId)
+        .map((user) => ({ username: user.username, success: false, error: 'no linked Telegram chat for this user' }));
+
+      const text = formatAlertMessage(alert);
+      const sent = sendable.length > 0 ? await telegramService.sendToUsers(sendable, text) : [];
+      results = [...sent, ...unresolved];
+    }
+
     const failures = results.filter((result) => !result.success);
 
     return res.status(failures.length > 0 ? 207 : 200).json({
